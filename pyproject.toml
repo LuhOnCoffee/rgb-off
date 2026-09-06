@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rgboff"
+version = "1.0.4"
+description = "Turn off all RGB lighting on a Windows PC, and keep it off."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Jia Liang Lu" }]
+keywords = ["rgb", "openrgb", "lighting", "windows", "argb"]
+classifiers = [
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Hardware",
+]
+dependencies = [
+    "openrgb-python>=0.2.15",
+]
+
+[project.optional-dependencies]
+gui = ["pystray>=0.19", "pillow>=10.0"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.urls]
+Homepage = "https://github.com/LuhOnCoffee/rgb-off"
+Issues = "https://github.com/LuhOnCoffee/rgb-off/issues"
+
+[project.scripts]
+rgboff = "rgboff.cli:main"
+
+[project.gui-scripts]
+rgboff-gui = "rgboff.gui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]

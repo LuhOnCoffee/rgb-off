@@ -1,0 +1,57 @@
+name: Bug report
+description: Something doesn't work, or a device stays lit
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Lighting bugs are almost always hardware-specific, so the device list
+        below is the single most useful thing you can include.
+
+  - type: textarea
+    id: device-list
+    attributes:
+      label: Output of `rgboff-cli --list`
+      description: >
+        Run `rgboff-cli --list` from the install folder (usually
+        `C:\Program Files\RGB Off`). It shows every detected device, the modes
+        it exposes, and which mode RGB Off would pick.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: timing
+    attributes:
+      label: If a device stays lit, when does it come back?
+      options:
+        - It never goes off at all
+        - It goes off, then comes back within seconds
+        - It goes off, then comes back after a reboot
+        - Not applicable
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: RGB Off version
+      placeholder: "1.0.4 — shown next to the title in the window"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: The three status rows at the top of the window are all green
+        - label: No vendor RGB software (iCUE, Armoury Crate, Mystic Light…) is running

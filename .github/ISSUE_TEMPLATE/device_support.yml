@@ -1,0 +1,43 @@
+name: Device or vendor software support
+description: Add a controller RGB Off can't blank, or software it doesn't recognise
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What's missing?
+      options:
+        - A device OpenRGB detects but RGB Off can't turn off
+        - Vendor RGB software that isn't in the removal catalogue
+    validations:
+      required: true
+
+  - type: textarea
+    id: device-list
+    attributes:
+      label: Output of `rgboff-cli --list`
+      description: >
+        For a device: the entry, including its full mode list. The "will use"
+        line shows what the mode picker chose, which is usually where the
+        problem is.
+      render: text
+
+  - type: input
+    id: display-name
+    attributes:
+      label: For vendor software — its name in Settings > Apps
+      description: Exactly as Windows lists it, so the catalogue pattern matches.
+      placeholder: "e.g. Gigabyte Control Center"
+
+  - type: dropdown
+    id: cooling
+    attributes:
+      label: For vendor software — does it also control cooling or input?
+      description: >
+        Fan curves, pump speed, mouse DPI or macros. Anything that does gets
+        flagged and unticked by default so nobody loses fan control by surprise.
+      options:
+        - "Lighting only"
+        - "Also controls cooling (fans, pump)"
+        - "Also stores input profiles (DPI, macros)"
+        - "Not sure"

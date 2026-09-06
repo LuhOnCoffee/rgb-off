@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: My device isn't detected by OpenRGB at all
+    url: https://openrgb.org
+    about: >
+      If a device is missing from `rgboff-cli --list`, OpenRGB doesn't support
+      it yet. That's upstream — check their supported-device list first.
+  - name: RAM or GPU lighting doesn't appear
+    url: https://pawnio.eu
+    about: >
+      Almost always PawnIO missing or needing a reboot. Press Run setup in the
+      app, reboot, and check the status rows before filing.

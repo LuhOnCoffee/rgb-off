@@ -1,0 +1,174 @@
+name: Build Windows installer
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp on the build (e.g. 1.0.0)"
+        required: false
+        default: "0.0.0-dev"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Work out the version
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $v = $env:GITHUB_REF -replace '^refs/tags/v', ''
+          } else {
+            $v = '${{ github.event.inputs.version }}'
+            if (-not $v) { $v = '0.0.0-dev' }
+          }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Building version $v"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller pystray pillow openrgb-python pytest
+
+      - name: Test before packaging
+        run: pytest -q
+
+      - name: Regenerate the icon
+        run: python packaging/make_icon.py
+
+      - name: Build the windowed app
+        # --uac-admin: PawnIO only grants SMBus access to an elevated process,
+        # and SMBus is how RAM, GPU and most motherboard controllers are reached.
+        run: >
+          pyinstaller --noconfirm --clean --onefile --windowed --uac-admin
+          --name RGBOff
+          --icon assets/rgboff.ico
+          --add-data "assets/rgboff.ico;."
+          --paths src
+          --hidden-import pystray._win32
+          packaging/rgboff_entry.py
+
+      - name: Build the console tool
+        # NOT --name rgboff: Windows filenames are case-insensitive, so
+        # dist\rgboff.exe and dist\RGBOff.exe are the same file and the console
+        # build silently overwrote the windowed one. They also could not coexist
+        # in the installed program folder.
+        run: >
+          pyinstaller --noconfirm --clean --onefile --console
+          --name rgboff-cli
+          --icon assets/rgboff.ico
+          --paths src
+          --hidden-import pystray._win32
+          packaging/rgboff_entry.py
+
+      - name: Verify each build has the right PE subsystem
+        shell: pwsh
+        run: |
+          # Reads the Subsystem field from the PE optional header:
+          # 2 = WINDOWS_GUI (no console), 3 = WINDOWS_CUI (console).
+          # This is the check that would have caught the case-collision above.
+          function Get-PESubsystem([string] $Path) {
+            $fs = [IO.File]::OpenRead($Path)
+            try {
+              $br = New-Object IO.BinaryReader($fs)
+              $fs.Position = 0x3C
+              $peOffset = $br.ReadInt32()
+              # PE signature (4) + COFF file header (20) = optional header start
+              # Subsystem sits at offset 68 in the optional header, for both
+              # PE32 and PE32+.
+              $fs.Position = $peOffset + 24 + 68
+              return $br.ReadUInt16()
+            } finally { $fs.Dispose() }
+          }
+
+          $gui = Get-PESubsystem "dist\RGBOff.exe"
+          $cli = Get-PESubsystem "dist\rgboff-cli.exe"
+          Write-Host "RGBOff.exe     subsystem = $gui (want 2, GUI)"
+          Write-Host "rgboff-cli.exe subsystem = $cli (want 3, console)"
+          if ($gui -ne 2) { throw "RGBOff.exe is not a windowed build - it would open a console." }
+          if ($cli -ne 3) { throw "rgboff-cli.exe is not a console build." }
+
+      - name: Smoke-test the console build
+        shell: pwsh
+        run: |
+          $out = & .\dist\rgboff-cli.exe --version
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0) { throw "rgboff-cli.exe --version failed" }
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+            "/DMyAppVersion=${{ steps.ver.outputs.version }}" `
+            "installer\rgboff.iss"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: RGBOff-${{ steps.ver.outputs.version }}
+          path: |
+            dist/RGBOff.exe
+            dist/rgboff-cli.exe
+            dist/installer/*.exe
+          if-no-files-found: error
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The GitHub CLI is preinstalled on the runner. Using it instead of a
+          # third-party action keeps this first-party and makes the failure
+          # messages readable - a 404 here means the token lacks contents:write,
+          # which is capped by Settings > Actions > Workflow permissions.
+          $tag = "v${{ steps.ver.outputs.version }}"
+
+          $files = @()
+          $files += (Get-ChildItem -Path dist\installer -Filter *.exe).FullName
+          $files += (Resolve-Path dist\RGBOff.exe).Path
+          $files += (Resolve-Path dist\rgboff-cli.exe).Path
+          Write-Host "Assets to attach:"
+          $files | ForEach-Object { Write-Host "  $_" }
+
+          @"
+          ### Install
+
+          Download **RGBOff-${{ steps.ver.outputs.version }}-Setup.exe** and run it.
+
+          SmartScreen will warn you: the build is not code-signed, because a
+          certificate costs a few hundred dollars a year. Click **More info**
+          then **Run anyway**, or build it yourself from source.
+
+          Needs [PawnIO](https://pawnio.eu) for RAM and GPU lighting - the app
+          installs it for you from the Setup button.
+
+          ``RGBOff.exe`` is the app. ``rgboff-cli.exe`` is the command line tool
+          and opens a console by design.
+          "@ | Set-Content -Path release-notes.md -Encoding utf8
+
+          # A previous failed run can leave a draft release holding the tag.
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag already exists - replacing its assets."
+            gh release upload $tag $files --clobber
+            if ($LASTEXITCODE -ne 0) { throw "gh release upload failed" }
+            gh release edit $tag --draft=false --notes-file release-notes.md
+          } else {
+            Write-Host "Creating release $tag"
+            gh release create $tag $files --title "RGB Off $tag" --notes-file release-notes.md
+          }
+          if ($LASTEXITCODE -ne 0) { throw "gh release failed" }
