@@ -41,7 +41,8 @@ Then use **Remove vendor software…** to clear out anything that would fight th
 | **Keep re-applying while open** | For controllers that revert the second the client disconnects. |
 | **Remove vendor software…** | Scans, groups by risk, removes through each vendor's own uninstaller. |
 | **Setup** | Installs OpenRGB and PawnIO if missing, enables the SDK server, and reports every step. Only needed once. |
-| Tray icon | Right-click → turn off without opening the window. Closing the window hides the app to the tray rather than quitting it; use **Quit** in the tray menu to exit. |
+
+Closing the window quits. Nothing stays resident — the logon task does the recurring work, and the Start Menu has a **Turn RGB off now** shortcut for the manual case.
 
 There's a console build too, `rgboff-cli.exe`, for scripts and scheduled tasks:
 
@@ -109,7 +110,7 @@ That's what **run at logon** is for. If lighting returns a few *seconds* after a
 ```bash
 git clone https://github.com/LuhOnCoffee/rgb-off
 cd rgb-off
-pip install -e ".[gui,dev]"
+pip install -e ".[dev]"
 pytest                       # 57 tests, no hardware needed
 python -m rgboff             # run the app
 ```
@@ -127,7 +128,7 @@ src/rgboff/
   server.py      find OpenRGB, start its SDK server, PawnIO
   autostart.py   scheduled tasks, created from XML via schtasks
   elevation.py   admin checks
-  gui.py         tkinter window + pystray tray icon
+  gui.py         the tkinter window
   cli.py         argument parsing, shared by both builds
 ```
 

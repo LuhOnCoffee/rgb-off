@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.7
+
+- Closing the window now quits. There is no tray icon and no resident process.
+  The tray only ever offered a one-click blackout, which the logon task does
+  automatically and the Start Menu shortcut does on demand - so it was paying
+  for itself with a permanently running elevated process on a machine where
+  the app is opened perhaps twice a year.
+- Consequences: `pystray` and `Pillow` are no longer dependencies, so the
+  executable is smaller and there is one less LGPL library in the licensing
+  story; and an installer can no longer stall on a running copy, which is what
+  caused the "unable to automatically close all applications" error in 1.0.2.
+
 ## 1.0.6
 
 - Fix: 1.0.5 shipped a stale copy of `gui.py`. It carried the new version

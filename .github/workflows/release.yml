@@ -40,7 +40,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller pystray pillow openrgb-python pytest
+          pip install pyinstaller openrgb-python pytest
 
       - name: Test before packaging
         run: pytest -q
@@ -57,7 +57,6 @@ jobs:
           --icon assets/rgboff.ico
           --add-data "assets/rgboff.ico;."
           --paths src
-          --hidden-import pystray._win32
           packaging/rgboff_entry.py
 
       - name: Build the console tool
@@ -70,7 +69,6 @@ jobs:
           --name rgboff-cli
           --icon assets/rgboff.ico
           --paths src
-          --hidden-import pystray._win32
           packaging/rgboff_entry.py
 
       - name: Verify each build has the right PE subsystem

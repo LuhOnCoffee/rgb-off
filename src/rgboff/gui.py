@@ -1,4 +1,4 @@
-"""The desktop app: a window plus a system-tray icon.
+"""The desktop app: one window, and nothing left running once you close it.
 
 Long operations (scanning, uninstalling, talking to OpenRGB) run on worker
 threads and post results back through a queue, so the window never freezes.
@@ -78,77 +78,6 @@ def icon_path() -> str | None:
         return str(candidate) if candidate.is_file() else None
     except OSError:
         return None
-
-
-# --------------------------------------------------------------------------- #
-# tray icon
-# --------------------------------------------------------------------------- #
-
-def _tray_image():
-    """A small dark-bulb icon drawn at runtime, so no asset file is needed."""
-    from PIL import Image, ImageDraw  # noqa: PLC0415
-
-    size = 64
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.ellipse((8, 6, 56, 48), fill=(32, 34, 40, 255), outline=(120, 126, 138, 255), width=3)
-    d.rectangle((26, 46, 38, 58), fill=(120, 126, 138, 255))
-    d.line((16, 52, 48, 12), fill=(224, 92, 92, 255), width=5)
-    return img
-
-
-class Tray:
-    """Wraps pystray so the app still runs if pystray/Pillow are missing."""
-
-    def __init__(self, app: App):
-        self.app = app
-        self.icon = None
-        try:
-            import pystray  # noqa: PLC0415
-
-            self.icon = pystray.Icon(
-                "rgboff", _tray_image(), "RGB Off",
-                menu=pystray.Menu(
-                    pystray.MenuItem("Turn everything off", self._off, default=True),
-                    pystray.MenuItem("Open RGB Off", self._show),
-                    pystray.Menu.SEPARATOR,
-                    pystray.MenuItem("Quit", self._quit),
-                ),
-            )
-        except Exception:
-            self.icon = None
-
-    @property
-    def available(self) -> bool:
-        return self.icon is not None
-
-    def start(self) -> None:
-        if self.icon:
-            threading.Thread(target=self.icon.run, daemon=True).start()
-
-    def stop(self) -> None:
-        if self.icon:
-            try:
-                self.icon.stop()
-            except Exception:
-                pass
-
-    def notify(self, title: str, message: str) -> None:
-        """Best effort - not every pystray backend implements notifications."""
-        if self.icon:
-            try:
-                self.icon.notify(message, title)
-            except Exception:
-                pass
-
-    def _off(self, *_):
-        self.app.request(lambda: self.app.run_async(self.app.do_blackout))
-
-    def _show(self, *_):
-        self.app.request(self.app.show_window)
-
-    def _quit(self, *_):
-        self.app.request(self.app.quit_app)
 
 
 # --------------------------------------------------------------------------- #
@@ -259,17 +188,14 @@ class App:
         self.devices: list = []
         self.client = None
         self._hold_stop = threading.Event()
-        self._hide_explained = False
 
         self._build_style()
         self._build_widgets()
 
-        self.tray = Tray(self)
-        self.tray.start()
-        if self.tray.available:
-            self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
-        else:
-            self.root.protocol("WM_DELETE_WINDOW", self.quit_app)
+        # Closing the window quits. There is no tray icon and no resident
+        # process: the logon task does the recurring work, and the Start Menu
+        # has a "Turn RGB off now" shortcut for the manual case.
+        self.root.protocol("WM_DELETE_WINDOW", self.quit_app)
 
         self.root.after(100, self._drain_queue)
         self.root.after(200, lambda: self.run_async(self.refresh_all))
@@ -570,25 +496,8 @@ class App:
 
     # ---- window / lifecycle ----------------------------------------------- #
 
-    def show_window(self) -> None:
-        self.root.deiconify()
-        self.root.lift()
-        self.root.focus_force()
-        # Re-check on every open. This is what the Refresh button used to do,
-        # and doing it automatically is one less control to explain.
-        self.run_async(self.refresh_all)
-
-    def hide_window(self) -> None:
-        self.root.withdraw()
-        if not self._hide_explained:
-            self._hide_explained = True
-            self.tray.notify("RGB Off is still running",
-                             "It is in the notification area. Right-click the "
-                             "icon and choose Quit to exit.")
-
     def quit_app(self) -> None:
         self._hold_stop.set()
-        self.tray.stop()
         try:
             if self.client is not None:
                 self.client.disconnect()

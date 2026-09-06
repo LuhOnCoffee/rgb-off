@@ -11,8 +11,6 @@ which makes each executable a combined work:
 | Component | Licence | Role |
 |---|---|---|
 | [openrgb-python](https://github.com/jath03/openrgb-python) | **GPL-3.0** | Client for the OpenRGB SDK protocol |
-| [pystray](https://github.com/moses-palmer/pystray) | LGPL-3.0 | System-tray icon |
-| [Pillow](https://python-pillow.org/) | MIT-CMU (HPND) | Draws the tray icon at runtime |
 | [CPython](https://www.python.org/) and Tcl/Tk | PSF / BSD-style | Runtime and GUI toolkit |
 | [PyInstaller](https://pyinstaller.org/) bootloader | GPL-2.0 with an exception permitting bundling under any licence | Packaging |
 
@@ -20,10 +18,6 @@ which makes each executable a combined work:
 combined executable is licensed as a whole under GPL-3.0. Source for this
 project is at <https://github.com/LuhOnCoffee/rgb-off>; source for each library
 is at the links above.
-
-`pystray` is LGPL-3.0. Because the whole application is published under GPL-3.0
-with complete corresponding source, the LGPL's requirement that recipients be
-able to modify and relink the library is satisfied.
 
 ## Used, but not bundled
 
