@@ -158,15 +158,18 @@ jobs:
           and opens a console by design.
           "@ | Set-Content -Path release-notes.md -Encoding utf8
 
-          # A previous failed run can leave a draft release holding the tag.
+          # A published version is immutable. Package managers record the
+          # installer URL and its SHA256; replacing the asset behind a tag that
+          # someone has already indexed turns every install of it into a hash
+          # failure. So an existing release is left exactly as it is - the fix
+          # for a bad release is a new version, never a quiet swap.
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag already exists - replacing its assets."
-            gh release upload $tag $files --clobber
-            if ($LASTEXITCODE -ne 0) { throw "gh release upload failed" }
-            gh release edit $tag --draft=false --notes-file release-notes.md
-          } else {
-            Write-Host "Creating release $tag"
-            gh release create $tag $files --title "RGB Off $tag" --notes-file release-notes.md
+            Write-Host "Release $tag already exists - leaving its assets untouched."
+            Write-Host "To ship a change, cut a new version. Do not re-tag."
+            exit 0
           }
-          if ($LASTEXITCODE -ne 0) { throw "gh release failed" }
+
+          Write-Host "Creating release $tag"
+          gh release create $tag $files --title "RGB Off $tag" --notes-file release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }

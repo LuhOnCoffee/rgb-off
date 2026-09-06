@@ -50,6 +50,37 @@ CI runs `ruff` and `pytest` on every push. The release workflow additionally
 checks the PE subsystem of each built executable, because a case-insensitive
 filename collision once shipped the console build as the GUI one.
 
+## Releasing
+
+`git tag vX.Y.Z && git push origin vX.Y.Z`. The workflow builds, verifies and
+publishes.
+
+**A published version is immutable.** The workflow refuses to touch an existing
+release, and that is deliberate: package managers record the installer URL and
+its SHA256, so replacing the file behind a shipped tag breaks every install of
+that version. To fix a bad release, cut the next one.
+
+### Windows Package Manager (winget)
+
+Not submitted yet. When it is, the first submission is manual - the automation
+below only handles *updates* to a package that already exists:
+
+```powershell
+winget install Microsoft.WingetCreate
+wingetcreate new https://github.com/LuhOnCoffee/rgb-off/releases/download/vX.Y.Z/RGBOff-X.Y.Z-Setup.exe
+```
+
+It walks through the metadata, generates the manifest, and opens the PR against
+[microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs). Validation
+runs the installer in a sandbox; an unsigned installer gets extra scrutiny and
+may wait on a human reviewer.
+
+After that first version is merged, subsequent releases can be automated with
+[WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser), which needs
+a fork of winget-pkgs and a classic PAT with `public_repo` scope stored as a
+repository secret. Pin it to a commit SHA rather than a branch - it runs with a
+token that can open pull requests as you.
+
 ## Licence
 
 Contributions are accepted under GPL-3.0, the licence of the project. See
