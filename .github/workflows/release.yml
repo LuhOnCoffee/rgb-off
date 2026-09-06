@@ -173,3 +173,37 @@ jobs:
           Write-Host "Creating release $tag"
           gh release create $tag $files --title "RGB Off $tag" --notes-file release-notes.md
           if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
+
+  winget:
+    # Submits the manifest update to the Windows Package Manager.
+    #
+    # Inert until a WINGET_TOKEN repository secret exists, so it costs nothing
+    # before you set winget up. Two things to know before you do:
+    #
+    #   1. The FIRST version has to be submitted by hand with wingetcreate -
+    #      this action only updates a package already in winget-pkgs.
+    #   2. Pin the action to a commit SHA rather than a tag. It runs with a
+    #      classic PAT that can open pull requests as you, so a moved tag is a
+    #      supply-chain problem.
+    #
+    # See CONTRIBUTING.md for the one-time setup.
+    name: Submit to the Windows Package Manager
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+    steps:
+      - name: Update the winget manifest
+        if: env.WINGET_TOKEN != ''
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: LuhOnCoffee.RGBOff
+          installers-regex: 'Setup\.exe$'
+          token: ${{ env.WINGET_TOKEN }}
+
+      - name: Say why it was skipped
+        if: env.WINGET_TOKEN == ''
+        run: |
+          echo "No WINGET_TOKEN secret - skipping the winget submission."
+          echo "See CONTRIBUTING.md if you want this wired up."
