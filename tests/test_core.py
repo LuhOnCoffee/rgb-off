@@ -145,3 +145,70 @@ def test_device_type_of_reads_the_device(asus_gpu):
 def test_results_carry_the_pretty_type(corsair_ram):
     results = core.apply_all([corsair_ram], core.black())
     assert results[0].kind == "DRAM"
+
+
+# --------------------------------------------------------------------------- #
+# device-list settling
+# --------------------------------------------------------------------------- #
+
+class GrowingClient:
+    """OpenRGB answers its SDK port before it has finished enumerating.
+
+    A client that connects the instant the port opens sees only the devices
+    detected so far - in practice the SMBus ones, since those come first.
+    """
+
+    def __init__(self, stages):
+        self._stages = list(stages)
+        self.reloads = 0
+        self.devices = self._stages[0]
+
+    def update(self):
+        self.reloads += 1
+        if self._stages:
+            self._stages.pop(0)
+        if self._stages:
+            self.devices = self._stages[0]
+
+
+def test_wait_for_devices_waits_out_a_growing_list():
+    """The bug: two RAM sticks on launch, five devices after a manual refresh."""
+    ram, board, gpu = ["ram1", "ram2"], ["ram1", "ram2", "board"], list("abcde")
+    client = GrowingClient([ram, board, gpu, gpu])
+    assert core.wait_for_devices(client, interval=0) == 5
+
+
+def test_wait_for_devices_returns_immediately_when_already_stable():
+    client = GrowingClient([list("abc"), list("abc")])
+    assert core.wait_for_devices(client, interval=0) == 3
+
+
+def test_wait_for_devices_gives_up_rather_than_hanging():
+    forever = GrowingClient([[1], [1, 2], [1, 2, 3], [1, 2, 3, 4]])
+    forever._stages = [[1], [1, 2], [1, 2, 3], [1, 2, 3, 4]] * 10
+    assert core.wait_for_devices(forever, tries=4, interval=0) >= 1
+    assert forever.reloads <= 4
+
+
+def test_wait_for_devices_stops_when_the_client_cannot_reload():
+    class NoReload:
+        devices = ["only-one"]
+
+    assert core.wait_for_devices(NoReload(), interval=0) == 1
+
+
+def test_reload_devices_reports_whether_it_worked():
+    class Fine:
+        def update(self):
+            pass
+
+    class Broken:
+        def update(self):
+            raise RuntimeError("no")
+
+    class Nothing:
+        pass
+
+    assert core.reload_devices(Fine()) is True
+    assert core.reload_devices(Broken()) is False
+    assert core.reload_devices(Nothing()) is False

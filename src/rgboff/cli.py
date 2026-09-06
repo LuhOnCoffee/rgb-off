@@ -21,6 +21,7 @@ from .core import (
     device_type_of,
     parse_color,
     summarize,
+    wait_for_devices,
 )
 from .elevation import is_admin
 from .server import ensure_server, pawnio_installed
@@ -83,6 +84,10 @@ def run_cli(argv: list[str] | None = None) -> int:
         print(err, file=sys.stderr)
         return 2
 
+    # The logon task runs 30 seconds after login, while OpenRGB may still be
+    # enumerating. Without this the scheduled blackout would blank whatever had
+    # been detected so far and report success.
+    wait_for_devices(client, on_wait=say)
     devices = client.devices
     if not devices:
         print("OpenRGB detected zero devices. Usually: no administrator rights, "

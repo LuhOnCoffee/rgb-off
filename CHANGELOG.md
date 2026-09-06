@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.8
+
+- Fix: on launch only the RAM modules appeared, and the rest showed up only
+  after a manual refresh. OpenRGB answers its SDK port before it has finished
+  enumerating hardware, so connecting the moment the port opens returns a
+  partial list - the SMBus devices, because those are detected first - which
+  then grows with no notification to the client. The app now polls until two
+  consecutive reads agree.
+- The same race affected the blackout at logon, which runs 30 seconds after
+  login while OpenRGB may still be detecting. It would have blanked whatever
+  had been found so far and reported success. Both the window and the CLI now
+  wait.
+
 ## 1.0.7
 
 - Closing the window now quits. There is no tray icon and no resident process.

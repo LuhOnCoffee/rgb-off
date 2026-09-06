@@ -17,6 +17,9 @@ CLIENT_NAME = "rgboff"
 CONNECT_RETRIES = 10
 CONNECT_RETRY_DELAY = 1.0
 REFRESH_SECONDS = 5
+#: How long to keep re-reading the device list before trusting it.
+SETTLE_TRIES = 12
+SETTLE_INTERVAL = 0.5
 
 # Name preference, best first.
 #   Off     - the controller's own blackout. Stored on the device, often
@@ -278,6 +281,49 @@ def apply_all(devices: Iterable[Any], color: Any,
             results.append(DeviceResult(dev.name, kind, False,
                                         f"{type(err).__name__}: {err}"))
     return results
+
+
+def reload_devices(client: Any) -> bool:
+    """Ask the client to re-read the device list from the server.
+
+    openrgb-python has spelled this differently across versions, so try the
+    known names and report whether any of them worked.
+    """
+    for name in ("update", "update_devices", "get_devices"):
+        fn = getattr(client, name, None)
+        if callable(fn):
+            try:
+                fn()
+                return True
+            except Exception:
+                continue
+    return False
+
+
+def wait_for_devices(client: Any, tries: int = SETTLE_TRIES,
+                     interval: float = SETTLE_INTERVAL, on_wait=None) -> int:
+    """Block until the device list stops growing, and return its size.
+
+    OpenRGB opens its SDK port before it has finished enumerating hardware, so
+    a client that connects the moment the port answers sees a partial list -
+    typically just the SMBus devices, because those are detected first. The
+    list then grows underneath us with no notification. Polling until two
+    consecutive reads agree is the reliable fix; the alternative, a fixed
+    sleep, is either too short on a cold boot or wasted time on a warm one.
+    """
+    previous = -1
+    for attempt in range(max(1, tries)):
+        count = len(getattr(client, "devices", []) or [])
+        if count and count == previous:
+            return count
+        if on_wait and attempt == 1:
+            on_wait("Waiting for OpenRGB to finish detecting devices…")
+        previous = count
+        time.sleep(interval)
+        if not reload_devices(client):
+            # Nothing to re-read with: the count cannot change, so stop.
+            return count
+    return len(getattr(client, "devices", []) or [])
 
 
 def turn_off(client: Any = None, color: Any = None,

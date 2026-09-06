@@ -111,7 +111,7 @@ That's what **run at logon** is for. If lighting returns a few *seconds* after a
 git clone https://github.com/LuhOnCoffee/rgb-off
 cd rgb-off
 pip install -e ".[dev]"
-pytest                       # 57 tests, no hardware needed
+pytest                       # 62 tests, no hardware needed
 python -m rgboff             # run the app
 ```
 

@@ -27,6 +27,7 @@ from .core import (
     black,
     connect,
     describe_plan,
+    wait_for_devices,
 )
 from .elevation import is_admin, relaunch_as_admin
 from .server import (
@@ -354,6 +355,10 @@ class App:
 
         try:
             self.client = connect()
+            # OpenRGB answers its port before it has finished detecting, so a
+            # list read straight after connecting is usually just the SMBus
+            # devices. Wait for it to stop growing.
+            wait_for_devices(self.client, on_wait=self._status)
             self.devices = list(self.client.devices)
         except OpenRGBUnavailable as err:
             self._status(str(err))
@@ -383,6 +388,7 @@ class App:
         try:
             if self.client is None:
                 self.client = connect()
+                wait_for_devices(self.client)
             results = apply_all(self.client.devices, black(), True)
         except Exception as err:
             self._status(f"Failed: {err}")
