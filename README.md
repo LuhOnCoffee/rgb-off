@@ -9,7 +9,7 @@ Motherboard headers, ARGB fans and strips, RAM, GPU, peripherals. One button, on
 [![Latest release](https://img.shields.io/github/v/release/LuhOnCoffee/rgb-off)](https://github.com/LuhOnCoffee/rgb-off/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/LuhOnCoffee/rgb-off/total)](https://github.com/LuhOnCoffee/rgb-off/releases)
 
-![The RGB Off window: three green status rows, a table of detected devices with the mode each will use, and one button](assets/screenshot.png)
+![The RGB Off window: a list of detected devices with the mode each will use, and one button](assets/screenshot.png)
 
 ---
 
