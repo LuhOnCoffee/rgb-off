@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.5
+
+Simplification pass. Everything removed here was information the user could not
+act on, or a control that did something the app can decide for itself.
+
+- The three health rows are gone. Green ticks reading "yes, fine" said nothing;
+  the checks matter only when one fails, so they now surface as a single amber
+  panel that appears only then and carries the button that fixes it.
+- The device table lost its Type and LED-count columns. Neither changed what
+  anyone would do. The chosen mode stays, because it is the first thing to look
+  at when a device refuses to go dark, and `rgboff-cli --list` still prints
+  everything.
+- The Refresh button is gone; opening the window re-checks automatically.
+- Shorter option labels, no subtitle, no section heading, smaller window.
+
 ## 1.0.4
 
 - The window and taskbar now show the app's own icon. PyInstaller's `--icon`

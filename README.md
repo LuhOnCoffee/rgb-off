@@ -25,7 +25,7 @@ Grab the latest **`RGBOff-x.y.z-Setup.exe`** from [Releases](https://github.com/
 
 > **SmartScreen will warn you.** The build isn't code-signed — a certificate costs a few hundred dollars a year and this is a free tool. Click **More info → Run anyway**, or [build it yourself](#building-from-source) and trust your own binary.
 
-On first launch, press **Run setup**. It installs what's missing:
+On first launch, press **Setup**. It installs what's missing:
 
 - **OpenRGB** — the engine that talks to every vendor's controllers.
 - **PawnIO** — a signed driver OpenRGB needs for SMBus access. Without it your RAM, GPU and most motherboard controllers never appear at all. (Older OpenRGB used WinRing0; that's gone, and if you have it lying around from other software you should remove it.)
@@ -37,10 +37,10 @@ Then use **Remove vendor software…** to clear out anything that would fight th
 | | |
 |---|---|
 | **Turn everything off** | The button. Everything OpenRGB can reach goes dark. |
-| **Turn RGB off automatically after each logon** | Registers a scheduled task. Tick this — see [why it's usually needed](#why-the-lights-come-back). |
-| **Keep re-applying while this window is open** | For controllers that revert the second the client disconnects. |
+| **Turn off automatically at logon** | Registers a scheduled task. Tick this — see [why it's usually needed](#why-the-lights-come-back). |
+| **Keep re-applying while open** | For controllers that revert the second the client disconnects. |
 | **Remove vendor software…** | Scans, groups by risk, removes through each vendor's own uninstaller. |
-| **Run setup** | Installs OpenRGB and PawnIO if missing, enables the SDK server, and reports every step. |
+| **Setup** | Installs OpenRGB and PawnIO if missing, enables the SDK server, and reports every step. Only needed once. |
 | Tray icon | Right-click → turn off without opening the window. Closing the window hides the app to the tray rather than quitting it; use **Quit** in the tray menu to exit. |
 
 There's a console build too, `rgboff-cli.exe`, for scripts and scheduled tasks:
@@ -94,7 +94,7 @@ That's what **run at logon** is for. If lighting returns a few *seconds* after a
 
 | Symptom | Cause |
 |---|---|
-| `PawnIO module initialization aborted (code=-2147023728)` | PawnIO isn't installed. Press **Run setup**, then reboot. |
+| `PawnIO module initialization aborted (code=-2147023728)` | PawnIO isn't installed. Press **Setup**, then reboot. |
 | Zero devices detected | No admin rights, PawnIO missing, or vendor software still holding the hardware. |
 | RAM and GPU stay lit, everything else goes dark | Same two causes — check the status lines at the top of the window. |
 | `Failed to find superio in the executable's directory` | Affects a few motherboard fan/LED controllers only. SMBus is unaffected. |

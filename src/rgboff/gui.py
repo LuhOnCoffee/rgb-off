@@ -10,7 +10,6 @@ import queue
 import sys
 import threading
 import tkinter as tk
-from pathlib import Path
 from tkinter import messagebox, ttk
 
 from . import __version__, vendors
@@ -69,21 +68,6 @@ DOT_FONT = ("Segoe UI", 11)
 DOT = "●"
 
 
-def icon_path() -> str | None:
-    """The .ico, whether we are frozen by PyInstaller or running from source.
-
-    PyInstaller's --icon only sets the icon on the executable; the Tk window
-    keeps its default feather unless we set it ourselves.
-    """
-    bundled = getattr(sys, "_MEIPASS", None)
-    candidate = (Path(bundled) / "rgboff.ico" if bundled
-                 else Path(__file__).resolve().parents[2] / "assets" / "rgboff.ico")
-    try:
-        return str(candidate) if candidate.is_file() else None
-    except OSError:
-        return None
-
-
 # --------------------------------------------------------------------------- #
 # tray icon
 # --------------------------------------------------------------------------- #
@@ -134,14 +118,6 @@ class Tray:
         if self.icon:
             try:
                 self.icon.stop()
-            except Exception:
-                pass
-
-    def notify(self, title: str, message: str) -> None:
-        """Best effort - not every pystray backend implements notifications."""
-        if self.icon:
-            try:
-                self.icon.notify(message, title)
             except Exception:
                 pass
 
@@ -239,19 +215,10 @@ class App:
         self.root.minsize(700, 560)
         self.root.configure(bg=BG)
 
-        icon = icon_path()
-        if icon:
-            try:
-                # default=True so Toplevels (the vendor dialog) inherit it.
-                self.root.iconbitmap(default=icon)
-            except tk.TclError:
-                pass
-
         self.ui_queue: queue.Queue = queue.Queue()
         self.devices: list = []
         self.client = None
         self._hold_stop = threading.Event()
-        self._hide_explained = False
 
         self._build_style()
         self._build_widgets()
@@ -585,11 +552,6 @@ class App:
 
     def hide_window(self) -> None:
         self.root.withdraw()
-        if not self._hide_explained:
-            self._hide_explained = True
-            self.tray.notify("RGB Off is still running",
-                             "It is in the notification area. Right-click the "
-                             "icon and choose Quit to exit.")
 
     def quit_app(self) -> None:
         self._hold_stop.set()

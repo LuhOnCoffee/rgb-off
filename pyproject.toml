@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rgboff"
-version = "1.0.4"
+version = "1.0.5"
 description = "Turn off all RGB lighting on a Windows PC, and keep it off."
 readme = "README.md"
 requires-python = ">=3.10"
