@@ -10,6 +10,7 @@ import queue
 import sys
 import threading
 import tkinter as tk
+from pathlib import Path
 from tkinter import messagebox, ttk
 
 from . import __version__, vendors
@@ -26,7 +27,6 @@ from .core import (
     black,
     connect,
     describe_plan,
-    device_type_of,
 )
 from .elevation import is_admin, relaunch_as_admin
 from .server import (
@@ -63,9 +63,21 @@ SUB_FONT = ("Segoe UI", 10)
 BODY_FONT = ("Segoe UI", 10)
 LABEL_FONT = ("Segoe UI Semibold", 9)
 BUTTON_FONT = ("Segoe UI Semibold", 12)
-DOT_FONT = ("Segoe UI", 11)
 
-DOT = "●"
+
+def icon_path() -> str | None:
+    """The .ico, whether we are frozen by PyInstaller or running from source.
+
+    PyInstaller's --icon only sets the icon on the executable; the Tk window
+    keeps its default feather unless we set it ourselves.
+    """
+    bundled = getattr(sys, "_MEIPASS", None)
+    candidate = (Path(bundled) / "rgboff.ico" if bundled
+                 else Path(__file__).resolve().parents[2] / "assets" / "rgboff.ico")
+    try:
+        return str(candidate) if candidate.is_file() else None
+    except OSError:
+        return None
 
 
 # --------------------------------------------------------------------------- #
@@ -121,6 +133,14 @@ class Tray:
             except Exception:
                 pass
 
+    def notify(self, title: str, message: str) -> None:
+        """Best effort - not every pystray backend implements notifications."""
+        if self.icon:
+            try:
+                self.icon.notify(message, title)
+            except Exception:
+                pass
+
     def _off(self, *_):
         self.app.request(lambda: self.app.run_async(self.app.do_blackout))
 
@@ -141,24 +161,36 @@ def card(parent: tk.Misc) -> tk.Frame:
                     highlightcolor=BORDER, highlightthickness=1, bd=0)
 
 
-class StatusRow:
-    """One health indicator: a coloured dot, a name, and a state sentence."""
+class ProblemBanner:
+    """Appears only when a health check actually fails.
 
-    def __init__(self, parent: tk.Misc, name: str, row: int):
-        self.dot = tk.Label(parent, text=DOT, font=DOT_FONT, bg=SURFACE, fg=FAINT)
-        self.dot.grid(row=row, column=0, sticky="w", padx=(14, 8), pady=3)
+    Three green ticks reading "yes, fine" are three lines of nothing. The
+    administrator / PawnIO / server checks matter precisely when one of them
+    fails, so the panel earns its space only then - and when it does, it says
+    what is wrong and offers the one button that fixes it.
+    """
 
-        self.name = tk.Label(parent, text=name, font=LABEL_FONT, bg=SURFACE, fg=TEXT,
-                             anchor="w", width=15)
-        self.name.grid(row=row, column=1, sticky="w", pady=3)
+    def __init__(self, parent: tk.Misc, on_fix):
+        self.frame = tk.Frame(parent, bg=SURFACE, highlightbackground=WARN,
+                              highlightcolor=WARN, highlightthickness=1, bd=0)
+        self.label = tk.Label(self.frame, text="", bg=SURFACE, fg=WARN,
+                              font=BODY_FONT, anchor="w", justify="left",
+                              wraplength=440)
+        self.label.pack(side="left", fill="x", expand=True, padx=(14, 10), pady=12)
+        self.button = quiet_button(self.frame, "Fix this", on_fix)
+        self.button.pack(side="right", padx=14, pady=10)
+        self._shown = False
 
-        self.state = tk.Label(parent, text="checking…", font=BODY_FONT, bg=SURFACE,
-                              fg=MUTED, anchor="w", justify="left")
-        self.state.grid(row=row, column=2, sticky="w", padx=(0, 14), pady=3)
+    def show(self, problems: list[str], before: tk.Misc, padx: int) -> None:
+        self.label.configure(text="\n".join(problems))
+        if not self._shown:
+            self.frame.pack(fill="x", padx=padx, pady=(0, 12), before=before)
+            self._shown = True
 
-    def set(self, ok: bool, text: str) -> None:
-        self.dot.configure(fg=GOOD if ok else WARN)
-        self.state.configure(text=text, fg=MUTED if ok else WARN)
+    def hide(self) -> None:
+        if self._shown:
+            self.frame.pack_forget()
+            self._shown = False
 
 
 class PrimaryButton(tk.Button):
@@ -211,14 +243,23 @@ class App:
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("RGB Off")
-        self.root.geometry("780x620")
-        self.root.minsize(700, 560)
+        self.root.geometry("620x520")
+        self.root.minsize(560, 460)
         self.root.configure(bg=BG)
+
+        icon = icon_path()
+        if icon:
+            try:
+                # default=True so Toplevels (the vendor dialog) inherit it.
+                self.root.iconbitmap(default=icon)
+            except tk.TclError:
+                pass
 
         self.ui_queue: queue.Queue = queue.Queue()
         self.devices: list = []
         self.client = None
         self._hold_stop = threading.Event()
+        self._hide_explained = False
 
         self._build_style()
         self._build_widgets()
@@ -272,36 +313,17 @@ class App:
     def _build_widgets(self) -> None:
         gutter = 20
 
+        self.gutter = gutter
+
         # ---- header ------------------------------------------------------ #
         header = tk.Frame(self.root, bg=BG)
-        header.pack(fill="x", padx=gutter, pady=(18, 4))
+        header.pack(fill="x", padx=gutter, pady=(18, 14))
         tk.Label(header, text="RGB Off", font=TITLE_FONT, bg=BG, fg=TEXT).pack(side="left")
         tk.Label(header, text=f"v{__version__}", font=SUB_FONT, bg=BG, fg=FAINT
                  ).pack(side="left", padx=(10, 0), pady=(8, 0))
-        tk.Label(header, text="Every LED OpenRGB can reach", font=SUB_FONT,
-                 bg=BG, fg=MUTED).pack(side="right", pady=(8, 0))
 
-        # ---- health card ------------------------------------------------- #
-        status_card = card(self.root)
-        status_card.pack(fill="x", padx=gutter, pady=(10, 0))
-        status_card.columnconfigure(2, weight=1)
-
-        self.row_admin = StatusRow(status_card, "Administrator", 0)
-        self.row_pawnio = StatusRow(status_card, "PawnIO driver", 1)
-        self.row_server = StatusRow(status_card, "OpenRGB server", 2)
-
-        self.btn_setup = quiet_button(status_card, "Run setup",
-                                      lambda: self.run_async(self.do_setup))
-        self.btn_setup.grid(row=0, column=3, rowspan=3, sticky="e", padx=14, pady=12)
-
-        # ---- devices ----------------------------------------------------- #
-        tk.Label(self.root, text="DETECTED DEVICES", font=LABEL_FONT, bg=BG,
-                 fg=FAINT).pack(anchor="w", padx=gutter, pady=(18, 6))
-
-        # Everything below the table is packed from the bottom edge FIRST, so
-        # the table absorbs whatever height is left over. Packing top-down
-        # instead lets an expanding table push the controls and the status line
-        # off a short window.
+        # Bottom half first, so the device list absorbs the leftover height and
+        # can never push the controls or the status line off a short window.
         bottom = tk.Frame(self.root, bg=BG)
         bottom.pack(side="bottom", fill="x")
 
@@ -313,40 +335,42 @@ class App:
         opts.pack(fill="x", padx=gutter)
 
         self.var_logon = tk.BooleanVar(value=task_exists(TASK_BLACKOUT))
-        dark_check(opts, "Turn RGB off automatically after each logon",
+        dark_check(opts, "Turn off automatically at logon",
                    self.var_logon, self.toggle_logon).pack(anchor="w", pady=1)
 
         self.var_hold = tk.BooleanVar(value=False)
-        dark_check(opts, "Keep re-applying while this window is open",
+        dark_check(opts, "Keep re-applying while open",
                    self.var_hold, self.toggle_hold).pack(anchor="w", pady=1)
 
         actions = tk.Frame(bottom, bg=BG)
         actions.pack(fill="x", padx=gutter, pady=(14, 0))
-        quiet_button(actions, "Refresh",
-                     lambda: self.run_async(self.refresh_all)).pack(side="left")
         quiet_button(actions, "Remove vendor software…",
-                     self.open_vendor_dialog).pack(side="left", padx=8)
+                     self.open_vendor_dialog).pack(side="left")
+        quiet_button(actions, "Setup",
+                     lambda: self.run_async(self.do_setup)).pack(side="left", padx=8)
 
         tk.Frame(bottom, bg=BORDER, height=1).pack(fill="x", pady=(16, 0))
         self.status = tk.Label(bottom, text="Starting…", font=SUB_FONT, bg=BG,
-                               fg=MUTED, anchor="w", wraplength=720, justify="left")
+                               fg=MUTED, anchor="w", wraplength=620, justify="left")
         self.status.pack(fill="x", padx=gutter, pady=(8, 12))
 
-        # ---- the table fills what remains -------------------------------- #
+        # ---- the device list fills what remains -------------------------- #
         table_wrap = card(self.root)
         table_wrap.pack(side="top", fill="both", expand=True, padx=gutter)
+        self.table_wrap = table_wrap
 
-        cols = ("type", "leds", "mode")
-        self.tree = ttk.Treeview(table_wrap, columns=cols, show="tree headings",
-                                 height=8, selectmode="none")
-        self.tree.heading("#0", text="Device", anchor="w")
-        self.tree.heading("type", text="Type", anchor="w")
-        self.tree.heading("leds", text="LEDs", anchor="e")
-        self.tree.heading("mode", text="Will use", anchor="w")
-        self.tree.column("#0", width=310, anchor="w", stretch=True)
-        self.tree.column("type", width=120, anchor="w", stretch=False)
-        self.tree.column("leds", width=64, anchor="e", stretch=False)
-        self.tree.column("mode", width=150, anchor="w", stretch=False)
+        # Built last, shown only when a check fails - see ProblemBanner.
+        self.banner = ProblemBanner(self.root,
+                                    lambda: self.run_async(self.do_setup))
+
+        # Two columns, no headings. Type and LED count were decoration - they
+        # never changed what the user would do. The mode name stays because it
+        # is the first thing to look at when a device refuses to go dark, and
+        # `rgboff-cli --list` still prints everything.
+        self.tree = ttk.Treeview(table_wrap, columns=("mode",), show="tree",
+                                 height=6, selectmode="none")
+        self.tree.column("#0", anchor="w", stretch=True)
+        self.tree.column("mode", width=130, anchor="e", stretch=False)
         self.tree.tag_configure("odd", background="#1a1e25")
         self.tree.tag_configure("even", background=TABLE)
         self.tree.pack(fill="both", expand=True, padx=1, pady=1)
@@ -382,22 +406,24 @@ class App:
 
     def refresh_all(self) -> None:
         self._status("Checking…")
-        admin = is_admin()
-        pawn = pawnio_installed()
 
-        self.request(self.row_admin.set, admin,
-                     "Running elevated" if admin
-                     else "Not elevated — RAM and GPU lighting stay invisible")
-        self.request(self.row_pawnio.set, pawn,
-                     "Installed — SMBus reachable" if pawn
-                     else "Missing — RAM, GPU and most boards will not appear")
+        problems: list[str] = []
+        if not is_admin():
+            problems.append("Not running as administrator — RAM and GPU "
+                            "lighting will be invisible.")
+        if not pawnio_installed():
+            problems.append("PawnIO is not installed — RAM, GPU and most "
+                            "motherboards will not appear.")
 
         ok, message = ensure_server()
-        self.request(self.row_server.set, ok,
-                     "Running on 127.0.0.1:6742" if ok else message)
+        if not ok:
+            problems.append(message)
+
+        self.request(self._set_problems, problems)
+
         if not ok:
             self.request(self._fill_tree, [])
-            self._status(message)
+            self._status("OpenRGB is not reachable.")
             return
 
         try:
@@ -407,17 +433,21 @@ class App:
             self._status(str(err))
             return
 
-        rows = [(d.name, device_type_of(d), len(getattr(d, "leds", [])),
-                 describe_plan(d)) for d in self.devices]
+        rows = [(d.name, describe_plan(d)) for d in self.devices]
         self.request(self._fill_tree, rows)
-        self._status(f"{len(rows)} device(s) detected."
-                     if rows else "No devices detected.")
+        self._status(f"{len(rows)} devices ready." if rows
+                     else "No devices detected.")
+
+    def _set_problems(self, problems: list[str]) -> None:
+        if problems:
+            self.banner.show(problems, before=self.table_wrap, padx=self.gutter)
+        else:
+            self.banner.hide()
 
     def _fill_tree(self, rows) -> None:
         self.tree.delete(*self.tree.get_children())
-        for i, (name, kind, leds, mode) in enumerate(rows):
-            self.tree.insert("", "end", text="  " + name,
-                             values=(kind, leds, mode),
+        for i, (name, mode) in enumerate(rows):
+            self.tree.insert("", "end", text="  " + name, values=(mode + "  ",),
                              tags=("even" if i % 2 else "odd",))
 
     # ---- actions ---------------------------------------------------------- #
@@ -452,43 +482,38 @@ class App:
             self.request(self.offer_elevation)
             return
 
-        self.request(lambda: self.btn_setup.configure(text="Working…",
-                                                      state="disabled"))
         done: list[str] = []
         problems: list[str] = []
-        try:
-            self._status("Checking PawnIO…")
-            if pawnio_installed():
-                done.append("PawnIO already installed")
+
+        self._status("Checking PawnIO…")
+        if pawnio_installed():
+            done.append("PawnIO already installed")
+        else:
+            ok, detail = install_pawnio()
+            if ok:
+                done.append("PawnIO installed (reboot to load the driver)")
             else:
-                ok, detail = install_pawnio()
-                if ok:
-                    done.append("PawnIO installed (reboot to load the driver)")
-                else:
-                    problems.append(f"PawnIO: {detail} — get it from {PAWNIO_URL}")
+                problems.append(f"PawnIO: {detail} — get it from {PAWNIO_URL}")
 
-            self._status("Checking OpenRGB…")
-            if find_openrgb() is None:
-                ok, detail = install_openrgb()
-                if ok:
-                    done.append("OpenRGB installed")
-                else:
-                    problems.append(f"OpenRGB: {detail} — get it from {OPENRGB_URL}")
+        self._status("Checking OpenRGB…")
+        if find_openrgb() is None:
+            ok, detail = install_openrgb()
+            if ok:
+                done.append("OpenRGB installed")
             else:
-                done.append("OpenRGB already installed")
+                problems.append(f"OpenRGB: {detail} — get it from {OPENRGB_URL}")
+        else:
+            done.append("OpenRGB already installed")
 
-            ok, detail = enable_sdk_server_in_settings()
-            done.append("SDK server enabled in OpenRGB settings" if ok
-                        else f"OpenRGB.json not updated ({detail})")
+        ok, detail = enable_sdk_server_in_settings()
+        done.append("SDK server enabled in OpenRGB settings" if ok
+                    else f"OpenRGB.json not updated ({detail})")
 
-            exe = find_openrgb()
-            if exe is not None:
-                ok, detail = enable_server_task(exe)
-                done.append("Logon task for the OpenRGB server registered" if ok
-                            else f"Server logon task failed ({detail})")
-        finally:
-            self.request(lambda: self.btn_setup.configure(text="Run setup",
-                                                          state="normal"))
+        exe = find_openrgb()
+        if exe is not None:
+            ok, detail = enable_server_task(exe)
+            done.append("Logon task for the OpenRGB server registered" if ok
+                        else f"Server logon task failed ({detail})")
 
         self.refresh_all()
 
@@ -549,9 +574,17 @@ class App:
         self.root.deiconify()
         self.root.lift()
         self.root.focus_force()
+        # Re-check on every open. This is what the Refresh button used to do,
+        # and doing it automatically is one less control to explain.
+        self.run_async(self.refresh_all)
 
     def hide_window(self) -> None:
         self.root.withdraw()
+        if not self._hide_explained:
+            self._hide_explained = True
+            self.tray.notify("RGB Off is still running",
+                             "It is in the notification area. Right-click the "
+                             "icon and choose Quit to exit.")
 
     def quit_app(self) -> None:
         self._hold_stop.set()

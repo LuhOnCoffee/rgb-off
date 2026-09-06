@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.6
+
+- Fix: 1.0.5 shipped a stale copy of `gui.py`. It carried the new version
+  number but none of the simplification, and it silently reverted the window
+  icon and the tray notification added in 1.0.4. This release contains what
+  1.0.5 was supposed to.
+
 ## 1.0.5
 
 Simplification pass. Everything removed here was information the user could not

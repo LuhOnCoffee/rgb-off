@@ -10,5 +10,5 @@ License for details. You should have received a copy of the licence with this
 program; if not, see <https://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 __all__ = ["__version__"]
